@@ -1,0 +1,85 @@
+/* Smart Hydration App - CSS */
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #F0F6FF;
+}
+
+.container {
+  max-width: 480px;
+  margin: auto;
+  padding: 20px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+header h1 {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+header p {
+  font-size: 16px;
+  color: #555;
+}
+
+.card {
+  padding: 20px;
+  border-radius: 15px;
+  color: white;
+  margin: 12px 0;
+}
+
+.blue { background: #42A5F5; }
+.purple { background: #7E57C2; }
+.red { background: #EF5350; }
+
+.card h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.card p {
+  margin-top: 5px;
+  font-size: 14px;
+}
+
+.buttons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+button {
+  flex: 1;
+  margin: 5px;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.start { background: #4CAF50; }
+.stop { background: #D32F2F; }
+
+.info {
+  background: #fff;
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 15px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.info p {
+  margin: 8px 0;
+  color: #333;
+  font-size: 15px;
+}
