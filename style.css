@@ -10,7 +10,7 @@ body {
 /* Animated Background */
 .background {
   /* Soft, calming blue gradient */
-  background-image: linear-gradient(to top, #e6e9f0 0%, #eef1f5 100%);
+  background-image: linear-gradient(to top, #2c488a 0%, #eef1f5 100%);
   position: fixed;
   width: 100vw;
   height: 100vh;
@@ -25,7 +25,7 @@ body {
   left: 45vw;
   width: 10px;
   height: 10px;
-  border: solid 1px #b0c4de; /* Lighter blue for cubes */
+  border: solid 1px #2d4463; /* Lighter blue for cubes */
   transform-origin: top left;
   transform: scale(0) rotate(0deg) translate(-50%, -50%);
   animation: cube 12s ease-in forwards infinite;
