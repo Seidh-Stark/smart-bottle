@@ -85,7 +85,7 @@ body {
 header h1 {
   font-size: 3rem;
   font-weight: 700;
-  text-shadow: 0 0 10px rgba(0,0,0,0.2);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.219);
 }
 
 /* Card and Button styles for visibility on dark background */
