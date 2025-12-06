@@ -111,3 +111,41 @@ body {
   padding: 1rem;
   border-radius: 8px;
 }
+
+/* --- Responsive Design for Mobile --- */
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  header h1 {
+    font-size: 1.8rem;
+  }
+
+  .card {
+    width: 80vw;
+    padding: 1rem;
+  }
+
+  .card h2 {
+    font-size: 1.2rem;
+  }
+
+  /* Creative button placement for mobile */
+  .buttons {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    margin-top: 1rem;
+  }
+
+  .start, .stop {
+    width: 45%;
+    padding: 15px 10px;
+    font-size: 1rem;
+  }
+
+  .info {
+    width: 85%;
+  }
+}
