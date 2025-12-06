@@ -4,7 +4,7 @@ body {
     Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   margin: 0;
   padding: 0;
-  color: #030303; /* Dark muted blue for better readability on light background */
+  color: #423d3d; /* Dark muted blue for better readability on light background */
 }
 
 /* Animated Background */
@@ -109,7 +109,7 @@ body {
 /* Info section styles */
 .info {
   margin-top: 2rem;
-  background: rgb(0, 0, 0); /* Subtle info box */
+  background: rgba(0, 0, 0, 0.2); /* Subtle info box */
   padding: 1rem;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.4);
