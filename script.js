@@ -13,15 +13,6 @@ const BOTTLE_HEIGHT = 4;
 const WATER_LEVEL_MAX = BOTTLE_HEIGHT * 0.9;
 let waterFillTarget = 0;
 
-// --- Event Listeners ---
-document.getElementById("startBtn").addEventListener("click", startAlarm);
-document.getElementById("stopBtn").addEventListener("click", stopAlarm);
-document.getElementById("connectBtn").addEventListener("click", connectBluetooth);
-document.getElementById("fillBtn").addEventListener("click", () => {
-    waterFillTarget = WATER_LEVEL_MAX;
-  waterFillTarget = WATER_LEVEL_MAX;
-});
-
 // --- Alarm Functions ---
 function startAlarm() {
   clearInterval(timer); // Reset any existing timer
@@ -104,14 +95,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const startBtn = document.getElementById("startBtn");
   const stopBtn = document.getElementById("stopBtn");
   const connectBtn = document.getElementById("connectBtn");
-  const fillBtn = document.getElementById("fillBtn");
 
   if (startBtn) startBtn.addEventListener("click", startAlarm);
   if (stopBtn) stopBtn.addEventListener("click", stopAlarm);
   if (connectBtn) connectBtn.addEventListener("click", connectBluetooth);
-  if (fillBtn) fillBtn.addEventListener("click", () => {
-    waterFillTarget = WATER_LEVEL_MAX;
-  });
+  
+  // Initialize 3D scene after DOM is loaded
+  init3D();
 });
 
 // --- Three.js 3D Rendering ---
@@ -169,10 +159,10 @@ function init3D() {
     emissive: 0x0084d3,
     emissiveIntensity: 0.3,
   });
-  const waterGeometry = new THREE.CylinderGeometry(0.75, 0.85, 1, 32);
+  const waterGeometry = new THREE.CylinderGeometry(0.75, 0.85, BOTTLE_HEIGHT, 32);
   water = new THREE.Mesh(waterGeometry, waterMaterial);
   water.scale.y = 0; // Start empty
-  water.position.y = -BOTTLE_HEIGHT / 2 + 0.2;
+  water.position.y = -BOTTLE_HEIGHT / 2;
   bottle.add(water);
 
   // Glowing Band
@@ -218,22 +208,28 @@ function onWindowResize() {
 function animate() {
   requestAnimationFrame(animate);
 
+  if (!bottle) return;
+
   // Automatic rotation
   bottle.rotation.y += 0.005;
 
   // Animate water level
-  const currentScale = water.scale.y;
-  const newScale = currentScale + (waterFillTarget - currentScale) * 0.05;
-  water.scale.y = newScale;
-  water.position.y = (-BOTTLE_HEIGHT + newScale) / 2;
+  if (water) {
+    const currentScale = water.scale.y;
+    const newScale = currentScale + (waterFillTarget - currentScale) * 0.05;
+    water.scale.y = newScale;
+    water.position.y = (-BOTTLE_HEIGHT / 2) + (newScale * BOTTLE_HEIGHT / 2);
+  }
 
   // Animate glowing band
-  const time = Date.now() * 0.002;
-  glowingBand.material.emissiveIntensity = Math.sin(time) * 0.5 + 0.5;
+  if (glowingBand) {
+    const time = Date.now() * 0.002;
+    glowingBand.material.emissiveIntensity = Math.sin(time) * 0.5 + 0.5;
+  }
 
   renderer.render(scene, camera);
-  composer.render();
+  if (composer) composer.render();
 }
 
 // --- Initialization ---
-init3D();
+// init3D is called from DOMContentLoaded event listener
