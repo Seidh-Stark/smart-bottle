@@ -7,13 +7,11 @@ let bluetoothDevice;
 let server;
 let writeCharacteristic;
 
-// Click events
 // Three.js variables
-let scene, camera, renderer, bottle, water, glowingBand;
 let scene, camera, renderer, bottle, water, glowingBand, composer;
 const BOTTLE_HEIGHT = 4;
 const WATER_LEVEL_MAX = BOTTLE_HEIGHT * 0.9;
-let waterFillTarget = WATER_LEVEL_MAX;
+let waterFillTarget = 0;
 
 // --- Event Listeners ---
 document.getElementById("startBtn").addEventListener("click", startAlarm);
@@ -26,9 +24,7 @@ document.getElementById("fillBtn").addEventListener("click", () => {
 
 // --- Alarm Functions ---
 function startAlarm() {
-  stopAlarm();
-
-  stopAlarm(); // Reset any existing timer
+  clearInterval(timer); // Reset any existing timer
   minutesLeft = 60;
   updateReminderText();
 
@@ -40,10 +36,8 @@ function startAlarm() {
     if (minutesLeft <= 0) {
       alert("Time to drink water! 💧");
       minutesLeft = 60;
-      minutesLeft = 60; // Reset for the next hour
-      waterFillTarget = WATER_LEVEL_MAX; // Animate refill after alert
+      waterFillTarget = WATER_LEVEL_MAX;
     }
-  }, 60000);
   }, 60000); // 60000ms = 1 minute
 
   document.getElementById("btStatus").innerText = "Bluetooth: Connected (HC-05)";
@@ -61,26 +55,19 @@ function stopAlarm() {
 function updateReminderText() {
   document.getElementById("nextReminder").innerText =
     "Next reminder: " + minutesLeft + " minutes";
-    `Next reminder: ${minutesLeft} minutes`;
 }
-let bluetoothDevice;
-let server;
-let writeCharacteristic;
 
 // --- Bluetooth Functions ---
 async function connectBluetooth() {
   try {
     bluetoothDevice = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
-      optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb'] // HM-10 UART Service
       optionalServices: ["0000ffe0-0000-1000-8000-00805f9b34fb"], // HM-10/HC-05 UART Service
     });
 
     server = await bluetoothDevice.gatt.connect();
     document.getElementById("btStatus").innerText = "Bluetooth: Connected";
 
-    const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
-    writeCharacteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
     const service = await server.getPrimaryService(
       "0000ffe0-0000-1000-8000-00805f9b34fb"
     );
@@ -99,14 +86,10 @@ async function connectBluetooth() {
 
 async function sendCommand(cmd) {
   if (!writeCharacteristic) {
-    alert("Bluetooth not connected!");
     console.log("Cannot send command, Bluetooth not connected.");
     return;
   }
 
-  let encoder = new TextEncoder();
-  await writeCharacteristic.writeValue(encoder.encode(cmd));
-  alert("Command sent: " + cmd);
   try {
     let encoder = new TextEncoder();
     await writeCharacteristic.writeValue(encoder.encode(cmd));
@@ -116,17 +99,32 @@ async function sendCommand(cmd) {
   }
 }
 
-document.getElementById("startBtn").addEventListener("click", () => {
-  sendCommand("START");
+// --- Event Listeners for Commands ---
+document.addEventListener("DOMContentLoaded", () => {
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
+  const connectBtn = document.getElementById("connectBtn");
+  const fillBtn = document.getElementById("fillBtn");
+
+  if (startBtn) startBtn.addEventListener("click", startAlarm);
+  if (stopBtn) stopBtn.addEventListener("click", stopAlarm);
+  if (connectBtn) connectBtn.addEventListener("click", connectBluetooth);
+  if (fillBtn) fillBtn.addEventListener("click", () => {
+    waterFillTarget = WATER_LEVEL_MAX;
+  });
 });
+
 // --- Three.js 3D Rendering ---
 function init3D() {
   const canvas = document.getElementById("bottle-canvas");
+  if (!canvas) {
+    console.error("bottle-canvas element not found");
+    return;
+  }
+  
   scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x00000000);
 
-document.getElementById("stopBtn").addEventListener("click", () => {
-  sendCommand("STOP");
-});
   // Camera
   camera = new THREE.PerspectiveCamera(
     50,
@@ -134,15 +132,10 @@ document.getElementById("stopBtn").addEventListener("click", () => {
     0.1,
     1000
   );
-  camera.position.z = 10;
+  camera.position.z = 8;
 
   // Renderer
   renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-  renderer = new THREE.WebGLRenderer({
-    canvas: canvas,
-    alpha: true,
-    antialias: true,
-  });
   renderer.setSize(canvas.clientWidth, canvas.clientHeight);
   renderer.setPixelRatio(window.devicePixelRatio);
 
@@ -153,66 +146,41 @@ document.getElementById("stopBtn").addEventListener("click", () => {
   directionalLight.position.set(5, 10, 7.5);
   scene.add(directionalLight);
 
-  // Bottle
+  // Bottle - Simple Cylinder Geometry (since no .glb file)
   const bottleMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
+    color: 0xadd8e6,
     transparent: true,
-    opacity: 0.3,
-    roughness: 0.1,
-    metalness: 0,
+    opacity: 0.5,
+    roughness: 0.2,
+    metalness: 0.1,
     transmission: 0.9,
     ior: 1.5,
   });
-  const bottleGeometry = new THREE.CylinderGeometry(1, 1, BOTTLE_HEIGHT, 32);
+  
+  const bottleGeometry = new THREE.CylinderGeometry(0.8, 0.9, BOTTLE_HEIGHT, 32);
   bottle = new THREE.Mesh(bottleGeometry, bottleMaterial);
+  bottle.position.y = 0;
   scene.add(bottle);
-  // GLTF Model Loader
-  const loader = new THREE.GLTFLoader();
-  loader.load('bottle.glb', (gltf) => {
-    bottle = gltf.scene;
-    bottle.scale.set(4, 4, 4); // Adjust scale as needed
-    bottle.position.y = -2; // Adjust position
 
   // Water
   const waterMaterial = new THREE.MeshStandardMaterial({
     color: 0x1ca3ec,
     roughness: 0.3,
+    emissive: 0x0084d3,
+    emissiveIntensity: 0.3,
   });
-  const waterGeometry = new THREE.CylinderGeometry(0.95, 0.95, 1, 32); // Height is 1, we scale it
+  const waterGeometry = new THREE.CylinderGeometry(0.75, 0.85, 1, 32);
   water = new THREE.Mesh(waterGeometry, waterMaterial);
   water.scale.y = 0; // Start empty
-  water.position.y = -BOTTLE_HEIGHT / 2;
-  bottle.add(water); // Add water as a child of the bottle
-    // Find and assign materials if needed
-    bottle.traverse((child) => {
-        if (child.isMesh) {
-            // Example: Make part of the bottle transparent
-            if (child.name === "Bottle_Body") {
-                child.material = new THREE.MeshPhysicalMaterial({
-                    color: 0xffffff,
-                    transmission: 0.9,
-                    opacity: 0.3,
-                    metalness: 0,
-                    roughness: 0.1,
-                    ior: 1.5,
-                    transparent: true,
-                });
-            }
-        }
-    });
+  water.position.y = -BOTTLE_HEIGHT / 2 + 0.2;
+  bottle.add(water);
 
   // Glowing Band
-  const bandGeometry = new THREE.CylinderGeometry(1.05, 1.05, 0.5, 32);
+  const bandGeometry = new THREE.CylinderGeometry(0.95, 0.95, 0.3, 32);
   const bandMaterial = new THREE.MeshStandardMaterial({
-      color: 0x00ffff,
-      emissive: 0x00ffff, // This makes it glow
-      emissiveIntensity: 1,
     color: 0x00ffff,
-    emissive: 0x00ffff, // This makes it glow
+    emissive: 0x00ffff,
     emissiveIntensity: 1,
-    scene.add(bottle);
-  }, undefined, (error) => {
-      console.error('An error happened while loading the model:', error);
   });
   glowingBand = new THREE.Mesh(bandGeometry, bandMaterial);
   glowingBand.position.y = 0;
@@ -220,17 +188,21 @@ document.getElementById("stopBtn").addEventListener("click", () => {
 
   // Post-processing for Bloom Effect
   const renderScene = new THREE.RenderPass(scene, camera);
-  const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+  const bloomPass = new THREE.UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    1.5,
+    0.4,
+    0.85
+  );
   bloomPass.threshold = 0;
-  bloomPass.strength = 1.2; // Glow intensity
+  bloomPass.strength = 1.2;
   bloomPass.radius = 0.5;
   composer = new THREE.EffectComposer(renderer);
   composer.addPass(renderScene);
   composer.addPass(bloomPass);
 
   // Handle window resizing
-  window.addEventListener('resize', onWindowResize, false);
-  window.addEventListener("resize", onWindowResize, false);
+  window.addEventListener('resize', onWindowResize);
 
   animate();
 }
@@ -240,10 +212,6 @@ function onWindowResize() {
     camera.aspect = canvas.clientWidth / canvas.clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-  const canvas = renderer.domElement;
-  camera.aspect = canvas.clientWidth / canvas.clientHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
   composer.setSize(canvas.clientWidth, canvas.clientHeight);
 }
 
@@ -252,18 +220,12 @@ function animate() {
 
   // Automatic rotation
   bottle.rotation.y += 0.005;
-  if (bottle) {
-    // Automatic rotation
-    bottle.rotation.y += 0.005;
-  }
 
   // Animate water level
   const currentScale = water.scale.y;
   const newScale = currentScale + (waterFillTarget - currentScale) * 0.05;
   water.scale.y = newScale;
   water.position.y = (-BOTTLE_HEIGHT + newScale) / 2;
-  // The rest of your animation logic for water and glowing band
-  // would go here, likely interacting with named objects from the loaded model.
 
   // Animate glowing band
   const time = Date.now() * 0.002;
