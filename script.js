@@ -7,13 +7,11 @@ let bluetoothDevice;
 let server;
 let writeCharacteristic;
 
-// Canvas variables
-let canvas, ctx;
-let waterLevel = 0;
+// Three.js variables
+let scene, camera, renderer, bottle, water, glowingBand, composer;
+const BOTTLE_HEIGHT = 4;
+const WATER_LEVEL_MAX = BOTTLE_HEIGHT * 0.9;
 let waterLevelTarget = 0;
-const BOTTLE_HEIGHT = 300;
-const BOTTLE_WIDTH = 120;
-const WATER_LEVEL_MAX = BOTTLE_HEIGHT * 0.75;
 
 // --- Alarm Functions ---
 function startAlarm() {
@@ -102,117 +100,133 @@ document.addEventListener("DOMContentLoaded", () => {
   if (stopBtn) stopBtn.addEventListener("click", stopAlarm);
   if (connectBtn) connectBtn.addEventListener("click", connectBluetooth);
   
-  // Initialize canvas after DOM is loaded
-  initCanvas();
+  // Initialize 3D scene after DOM is loaded
+  init3D();
 });
 
-// --- Canvas 2D Rendering ---
-function initCanvas() {
-  canvas = document.getElementById("bottle-canvas");
+// --- Three.js 3D Rendering ---
+function init3D() {
+  const canvas = document.getElementById("bottle-canvas");
   if (!canvas) {
     console.error("bottle-canvas element not found");
     return;
   }
   
-  ctx = canvas.getContext("2d");
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x00000000);
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(
+    50,
+    canvas.clientWidth / canvas.clientHeight,
+    0.1,
+    1000
+  );
+  camera.position.z = 8;
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+  scene.add(ambientLight);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+  directionalLight.position.set(5, 10, 7.5);
+  scene.add(directionalLight);
+
+  // Bottle - Simple Cylinder Geometry
+  const bottleMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xadd8e6,
+    transparent: true,
+    opacity: 0.5,
+    roughness: 0.2,
+    metalness: 0.1,
+    transmission: 0.9,
+    ior: 1.5,
+  });
   
-  // Set canvas size to match container
-  function resizeCanvas() {
-    const rect = canvas.parentElement.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-  }
-  
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-  
+  const bottleGeometry = new THREE.CylinderGeometry(0.8, 0.9, BOTTLE_HEIGHT, 32);
+  bottle = new THREE.Mesh(bottleGeometry, bottleMaterial);
+  bottle.position.y = 0;
+  scene.add(bottle);
+
+  // Water
+  const waterMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1ca3ec,
+    roughness: 0.3,
+    emissive: 0x0084d3,
+    emissiveIntensity: 0.3,
+  });
+  const waterGeometry = new THREE.CylinderGeometry(0.75, 0.85, BOTTLE_HEIGHT, 32);
+  water = new THREE.Mesh(waterGeometry, waterMaterial);
+  water.scale.y = 0; // Start empty
+  water.position.y = -BOTTLE_HEIGHT / 2;
+  bottle.add(water);
+
+  // Glowing Band
+  const bandGeometry = new THREE.CylinderGeometry(0.95, 0.95, 0.3, 32);
+  const bandMaterial = new THREE.MeshStandardMaterial({
+    color: 0x00ffff,
+    emissive: 0x00ffff,
+    emissiveIntensity: 1,
+  });
+  glowingBand = new THREE.Mesh(bandGeometry, bandMaterial);
+  glowingBand.position.y = 0;
+  bottle.add(glowingBand);
+
+  // Post-processing for Bloom Effect
+  const renderScene = new THREE.RenderPass(scene, camera);
+  const bloomPass = new THREE.UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    1.5,
+    0.4,
+    0.85
+  );
+  bloomPass.threshold = 0;
+  bloomPass.strength = 1.2;
+  bloomPass.radius = 0.5;
+  composer = new THREE.EffectComposer(renderer);
+  composer.addPass(renderScene);
+  composer.addPass(bloomPass);
+
+  // Handle window resizing
+  window.addEventListener('resize', onWindowResize);
+
   animate();
 }
 
-let rotation = 0;
-
-function drawBottle() {
-  const centerX = canvas.width / 2;
-  const centerY = canvas.height / 2;
-  
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
-  ctx.save();
-  ctx.translate(centerX, centerY);
-  
-  // Draw bottle with perspective/rotation effect
-  rotation += 2;
-  const perspectiveScale = Math.cos(rotation * Math.PI / 180) * 0.2 + 0.9;
-  
-  // Bottle outline
-  ctx.strokeStyle = "rgba(173, 216, 230, 0.8)";
-  ctx.lineWidth = 3;
-  ctx.fillStyle = "rgba(173, 216, 230, 0.1)";
-  
-  // Draw bottle shape (curved)
-  ctx.beginPath();
-  // Cap
-  ctx.fillRect(-15, -150, 30, 20);
-  ctx.strokeRect(-15, -150, 30, 20);
-  
-  // Neck
-  ctx.beginPath();
-  ctx.moveTo(-20, -130);
-  ctx.lineTo(-25, -80);
-  ctx.lineTo(-30, -60);
-  ctx.lineTo(-30, 60);
-  ctx.quadraticCurveTo(-30, 80, -20, 90);
-  ctx.lineTo(20, 90);
-  ctx.quadraticCurveTo(30, 80, 30, 60);
-  ctx.lineTo(30, -60);
-  ctx.lineTo(25, -80);
-  ctx.lineTo(20, -130);
-  ctx.closePath();
-  
-  ctx.fill();
-  ctx.stroke();
-  
-  // Draw water inside bottle
-  const waterHeightInPixels = waterLevel;
-  const waterY = 90 - waterHeightInPixels;
-  
-  // Water fill
-  ctx.fillStyle = "rgba(28, 163, 236, 0.6)";
-  ctx.beginPath();
-  ctx.moveTo(-28, waterY);
-  ctx.quadraticCurveTo(-28, 90, -20, 90);
-  ctx.lineTo(20, 90);
-  ctx.quadraticCurveTo(28, 90, 28, waterY);
-  ctx.quadraticCurveTo(28, waterY - 5, 20, waterY);
-  ctx.lineTo(-20, waterY);
-  ctx.quadraticCurveTo(-28, waterY - 5, -28, waterY);
-  ctx.closePath();
-  ctx.fill();
-  
-  // Water shimmer effect
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(-25, waterY - 3);
-  ctx.lineTo(25, waterY - 3);
-  ctx.stroke();
-  
-  // Glowing band around middle
-  const glowIntensity = Math.sin(Date.now() * 0.005) * 0.5 + 0.5;
-  ctx.strokeStyle = `rgba(0, 255, 255, ${glowIntensity * 0.8})`;
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 35, 8, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  
-  ctx.restore();
+function onWindowResize() {
+    const canvas = renderer.domElement;
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  composer.setSize(canvas.clientWidth, canvas.clientHeight);
 }
 
 function animate() {
-  // Smooth water level animation
-  const diff = waterLevelTarget - waterLevel;
-  waterLevel += diff * 0.05;
-  
-  drawBottle();
   requestAnimationFrame(animate);
+
+  if (!bottle) return;
+
+  // Automatic rotation
+  bottle.rotation.y += 0.005;
+
+  // Animate water level
+  if (water) {
+    const currentScale = water.scale.y;
+    const newScale = currentScale + (waterLevelTarget - currentScale) * 0.05;
+    water.scale.y = newScale;
+    water.position.y = (-BOTTLE_HEIGHT / 2) + (newScale * BOTTLE_HEIGHT / 2);
+  }
+
+  // Animate glowing band
+  if (glowingBand) {
+    const time = Date.now() * 0.002;
+    glowingBand.material.emissiveIntensity = Math.sin(time) * 0.5 + 0.5;
+  }
+
+  renderer.render(scene, camera);
+  if (composer) composer.render();
 }
