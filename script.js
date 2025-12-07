@@ -7,6 +7,7 @@ let bluetoothDevice;
 let server;
 let writeCharacteristic;
 
+// Click events
 // Three.js variables
 let scene, camera, renderer, bottle, water, glowingBand;
 const BOTTLE_HEIGHT = 4;
@@ -18,11 +19,14 @@ document.getElementById("startBtn").addEventListener("click", startAlarm);
 document.getElementById("stopBtn").addEventListener("click", stopAlarm);
 document.getElementById("connectBtn").addEventListener("click", connectBluetooth);
 document.getElementById("fillBtn").addEventListener("click", () => {
+    waterFillTarget = WATER_LEVEL_MAX;
   waterFillTarget = WATER_LEVEL_MAX;
 });
 
 // --- Alarm Functions ---
 function startAlarm() {
+  stopAlarm();
+
   stopAlarm(); // Reset any existing timer
   minutesLeft = 60;
   updateReminderText();
@@ -34,37 +38,48 @@ function startAlarm() {
 
     if (minutesLeft <= 0) {
       alert("Time to drink water! 💧");
+      minutesLeft = 60;
       minutesLeft = 60; // Reset for the next hour
       waterFillTarget = WATER_LEVEL_MAX; // Animate refill after alert
     }
+  }, 60000);
   }, 60000); // 60000ms = 1 minute
 
+  document.getElementById("btStatus").innerText = "Bluetooth: Connected (HC-05)";
   sendCommand("START");
 }
 
 function stopAlarm() {
   clearInterval(timer);
   document.getElementById("nextReminder").innerText = "Next reminder: stopped";
+  document.getElementById("btStatus").innerText = "Bluetooth: Disconnected";
   waterFillTarget = 0; // Empty the bottle visually
   sendCommand("STOP");
 }
 
 function updateReminderText() {
   document.getElementById("nextReminder").innerText =
+    "Next reminder: " + minutesLeft + " minutes";
     `Next reminder: ${minutesLeft} minutes`;
 }
+let bluetoothDevice;
+let server;
+let writeCharacteristic;
 
 // --- Bluetooth Functions ---
 async function connectBluetooth() {
   try {
     bluetoothDevice = await navigator.bluetooth.requestDevice({
       acceptAllDevices: true,
+      optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb'] // HM-10 UART Service
       optionalServices: ["0000ffe0-0000-1000-8000-00805f9b34fb"], // HM-10/HC-05 UART Service
     });
 
     server = await bluetoothDevice.gatt.connect();
     document.getElementById("btStatus").innerText = "Bluetooth: Connected";
 
+    const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+    writeCharacteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
     const service = await server.getPrimaryService(
       "0000ffe0-0000-1000-8000-00805f9b34fb"
     );
@@ -73,7 +88,9 @@ async function connectBluetooth() {
     );
 
     alert("Bluetooth Connected Successfully!");
+
   } catch (error) {
+    console.log(error);
     console.error("Bluetooth Error:", error);
     alert("Bluetooth Connection Failed!");
   }
@@ -81,10 +98,14 @@ async function connectBluetooth() {
 
 async function sendCommand(cmd) {
   if (!writeCharacteristic) {
+    alert("Bluetooth not connected!");
     console.log("Cannot send command, Bluetooth not connected.");
     return;
   }
 
+  let encoder = new TextEncoder();
+  await writeCharacteristic.writeValue(encoder.encode(cmd));
+  alert("Command sent: " + cmd);
   try {
     let encoder = new TextEncoder();
     await writeCharacteristic.writeValue(encoder.encode(cmd));
@@ -94,11 +115,17 @@ async function sendCommand(cmd) {
   }
 }
 
+document.getElementById("startBtn").addEventListener("click", () => {
+  sendCommand("START");
+});
 // --- Three.js 3D Rendering ---
 function init3D() {
   const canvas = document.getElementById("bottle-canvas");
   scene = new THREE.Scene();
 
+document.getElementById("stopBtn").addEventListener("click", () => {
+  sendCommand("STOP");
+});
   // Camera
   camera = new THREE.PerspectiveCamera(
     50,
@@ -109,6 +136,7 @@ function init3D() {
   camera.position.z = 10;
 
   // Renderer
+  renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
   renderer = new THREE.WebGLRenderer({
     canvas: canvas,
     alpha: true,
@@ -152,6 +180,9 @@ function init3D() {
   // Glowing Band
   const bandGeometry = new THREE.CylinderGeometry(1.05, 1.05, 0.5, 32);
   const bandMaterial = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00ffff, // This makes it glow
+      emissiveIntensity: 1,
     color: 0x00ffff,
     emissive: 0x00ffff, // This makes it glow
     emissiveIntensity: 1,
@@ -161,12 +192,17 @@ function init3D() {
   bottle.add(glowingBand);
 
   // Handle window resizing
+  window.addEventListener('resize', onWindowResize, false);
   window.addEventListener("resize", onWindowResize, false);
 
   animate();
 }
 
 function onWindowResize() {
+    const canvas = renderer.domElement;
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
   const canvas = renderer.domElement;
   camera.aspect = canvas.clientWidth / canvas.clientHeight;
   camera.updateProjectionMatrix();

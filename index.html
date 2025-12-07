@@ -1,63 +1,43 @@
 <!-- Smart Hydration Web App - HTML Structure -->
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Smart Hydration Bottle</title>
-    <link rel="stylesheet" href="style.css" />
-  </head>
-  <body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Hydration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="background">
+    <div class="cube"></div><div class="cube"></div><div class="cube"></div><div class="cube"></div><div class="cube"></div>
+    <button onclick="connectBluetooth()" class="start">Connect Bluetooth</button>
     <div class="container">
-      <h1>Smart Hydration Companion</h1>
-      <p id="btStatus">Bluetooth: Disconnected</p>
-      <p id="nextReminder">Next reminder: stopped</p>
-
-      <div id="bottle-container">
-        <canvas id="bottle-canvas"></canvas>
+      <header>
+        <h1>💧 Smart Hydration</h1>
+        <p>Stay healthy. Stay hydrated.</p>
+      </header>
+  
+      <div class="card blue">
+        <h2>1 Hour</h2>
+        <p>Start 60-min timer</p>
       </div>
-
-      <div class="controls">
-        <button id="connectBtn">Connect Bluetooth</button>
+  
+      <div class="buttons">
         <button id="startBtn" class="start">Start Alarm</button>
         <button id="stopBtn" class="stop">Stop Alarm</button>
-        <button id="fillBtn">Fill Water</button>
       </div>
-
-      <div class="info-section">
-        <h2>About Your Smart Bottle</h2>
-        <p>
-          Welcome to the future of hydration! This smart bottle is designed to
-          be your personal hydration coach. It tracks your water intake, reminds
-          you to drink at regular intervals, and ensures you stay perfectly
-          hydrated throughout the day.
-        </p>
-
-        <h2>Why It's Important</h2>
-        <p>
-          Staying hydrated is crucial for your health. Proper hydration improves
-          energy levels, brain function, and physical performance. It can also
-          prevent headaches and help your body's natural detoxification
-          processes. Our smart bottle makes it easy and fun to meet your daily
-          hydration goals.
-        </p>
-
-        <h2>How to Use</h2>
-        <ol>
-          <li>
-            <strong>Connect:</strong> Click the "Connect Bluetooth" button to
-            pair the app with your smart bottle.
-          </li>
-          <li>
-            <strong>Start:</strong> Press "Start Reminders" to begin receiving
-            hourly alerts to drink water.
-          </li>
-          <li><strong>Refill:</strong> Click "Fill Water" to see a cool animation and reset the water level in the app.</li>
-        </ol>
+  
+      <div class="info">
+        <p id="nextReminder">Next reminder: 60 minutes</p>
+        <p id="btStatus">Bluetooth: Disconnected</p>
+        <p id="battery">Battery: 92%</p>
       </div>
     </div>
+  </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="script.js"></script>
-  </body>
+  <script src="script.js"></script>
+</body>
 </html>
