@@ -12,12 +12,28 @@ let alarmDuration = 120; // default 2 minutes
 
 async function connectBluetooth() {
   try {
+    // Check if Web Bluetooth API is available
+    if (!navigator.bluetooth) {
+      alert("❌ Bluetooth not supported on this device/browser.\n\nSupported browsers: Chrome, Edge (desktop & mobile with Android 6+)");
+      console.error("Web Bluetooth API not available");
+      return;
+    }
+
+    // For mobile, request permission first
+    if (/Android|iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      console.log("Mobile device detected");
+    }
+
     device = await navigator.bluetooth.requestDevice({
       filters: [{ name: 'SmartHydrationBottle' }],
       optionalServices: [SERVICE_UUID, BATTERY_UUID]
     });
 
+    // Add disconnect event handler
+    device.addEventListener('gattserverdisconnected', onDeviceDisconnected);
+
     server = await device.gatt.connect();
+    console.log("GATT server connected");
 
     const service = await server.getPrimaryService(SERVICE_UUID);
     controlChar = await service.getCharacteristic(CONTROL_UUID);
@@ -40,9 +56,29 @@ async function connectBluetooth() {
     
     alert("✅ Bluetooth Connected!");
   } catch (error) {
-    alert("❌ Bluetooth connection failed");
-    console.error(error);
+    console.error("Bluetooth error:", error);
+    
+    // Provide specific error messages
+    if (error.name === 'NotFoundError') {
+      alert("❌ Device not found.\n\nMake sure:\n1. Device is powered on\n2. Device name is 'SmartHydrationBottle'\n3. Device is in pairing mode");
+    } else if (error.name === 'NotSupportedError') {
+      alert("❌ Web Bluetooth not supported on this browser.\n\nUse: Chrome, Edge, or Opera");
+    } else if (error.name === 'SecurityError') {
+      alert("❌ Bluetooth permission denied.\n\nGrant location/Bluetooth permission in settings");
+    } else {
+      alert("❌ Bluetooth connection failed: " + error.message);
+    }
   }
+}
+
+// Handle device disconnection
+function onDeviceDisconnected(event) {
+  const btn = document.getElementById('connectBtn');
+  btn.textContent = '🔵 Connect Bluetooth';
+  btn.classList.remove('connected');
+  btn.classList.add('blue');
+  btn.onclick = function() { connectBluetooth(); };
+  console.log("Device disconnected");
 }
 
 function updateBatteryDisplay(level){
