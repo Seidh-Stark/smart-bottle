@@ -1,232 +1,204 @@
-// Smart Hydration App - JavaScript
+const SERVICE_UUID = "12345678-1234-1234-1234-1234567890ab";
+const CONTROL_UUID = "abcd1234-5678-90ab-cdef-1234567890ab";
+const BATTERY_UUID = 0x180F;
+const BATTERY_LEVEL_UUID = 0x2A19;
 
-// --- Global Variables ---
-let timer;
-let minutesLeft = 60;
-let bluetoothDevice;
+let device;
 let server;
-let writeCharacteristic;
+let controlChar;
+let batteryChar;
+let timerInterval = null;
+let alarmDuration = 120; // default 2 minutes
 
-// Three.js variables
-let scene, camera, renderer, bottle, water, glowingBand, composer;
-const BOTTLE_HEIGHT = 4;
-const WATER_LEVEL_MAX = BOTTLE_HEIGHT * 0.9;
-let waterLevelTarget = 0;
-
-// --- Alarm Functions ---
-function startAlarm() {
-  clearInterval(timer); // Reset any existing timer
-  minutesLeft = 60;
-  updateReminderText();
-
-  timer = setInterval(() => {
-    minutesLeft--;
-    waterLevelTarget = Math.max(0, (minutesLeft / 60) * WATER_LEVEL_MAX);
-    updateReminderText();
-
-    if (minutesLeft <= 0) {
-      alert("Time to drink water! 💧");
-      minutesLeft = 60;
-      waterLevelTarget = WATER_LEVEL_MAX;
-    }
-  }, 60000); // 60000ms = 1 minute
-
-  document.getElementById("btStatus").innerText = "Bluetooth: Connected (HC-05)";
-  sendCommand("START");
-}
-
-function stopAlarm() {
-  clearInterval(timer);
-  document.getElementById("nextReminder").innerText = "Next reminder: stopped";
-  document.getElementById("btStatus").innerText = "Bluetooth: Disconnected";
-  waterLevelTarget = 0; // Empty the bottle visually
-  sendCommand("STOP");
-}
-
-function updateReminderText() {
-  document.getElementById("nextReminder").innerText =
-    "Next reminder: " + minutesLeft + " minutes";
-}
-
-// --- Bluetooth Functions ---
 async function connectBluetooth() {
   try {
-    bluetoothDevice = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: ["0000ffe0-0000-1000-8000-00805f9b34fb"], // HM-10/HC-05 UART Service
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ name: 'SmartHydrationBottle' }],
+      optionalServices: [SERVICE_UUID, BATTERY_UUID]
     });
 
-    server = await bluetoothDevice.gatt.connect();
-    document.getElementById("btStatus").innerText = "Bluetooth: Connected";
+    server = await device.gatt.connect();
 
-    const service = await server.getPrimaryService(
-      "0000ffe0-0000-1000-8000-00805f9b34fb"
-    );
-    writeCharacteristic = await service.getCharacteristic(
-      "0000ffe1-0000-1000-8000-00805f9b34fb"
-    );
+    const service = await server.getPrimaryService(SERVICE_UUID);
+    controlChar = await service.getCharacteristic(CONTROL_UUID);
 
-    alert("Bluetooth Connected Successfully!");
+    const batteryService = await server.getPrimaryService(BATTERY_UUID);
+    batteryChar = await batteryService.getCharacteristic(BATTERY_LEVEL_UUID);
 
+    batteryChar.startNotifications();
+    batteryChar.addEventListener('characteristicvaluechanged', e => {
+      const level = e.target.value.getUint8(0);
+      updateBatteryDisplay(level);
+    });
+
+    // Update button to show connected state
+    const btn = document.getElementById('connectBtn');
+    btn.textContent = '✅ Connected';
+    btn.classList.add('connected');
+    btn.classList.remove('blue');
+    btn.onclick = null; // disable reconnect
+    
+    alert("✅ Bluetooth Connected!");
   } catch (error) {
-    console.log(error);
-    console.error("Bluetooth Error:", error);
-    alert("Bluetooth Connection Failed!");
+    alert("❌ Bluetooth connection failed");
+    console.error(error);
   }
 }
 
-async function sendCommand(cmd) {
-  if (!writeCharacteristic) {
-    console.log("Cannot send command, Bluetooth not connected.");
-    return;
-  }
-
-  try {
-    let encoder = new TextEncoder();
-    await writeCharacteristic.writeValue(encoder.encode(cmd));
-    console.log("Command sent:", cmd);
-  } catch (error) {
-    console.error("Failed to send command:", error);
-  }
-}
-
-// --- Event Listeners for Commands ---
-document.addEventListener("DOMContentLoaded", () => {
-  const startBtn = document.getElementById("startBtn");
-  const stopBtn = document.getElementById("stopBtn");
-  const connectBtn = document.getElementById("connectBtn");
-
-  if (startBtn) startBtn.addEventListener("click", startAlarm);
-  if (stopBtn) stopBtn.addEventListener("click", stopAlarm);
-  if (connectBtn) connectBtn.addEventListener("click", connectBluetooth);
+function updateBatteryDisplay(level){
+  document.getElementById('batteryText').textContent = level + '%';
+  const fill = document.getElementById('batteryFill');
+  fill.style.width = level + '%';
   
-  // Initialize 3D scene after DOM is loaded
-  init3D();
+  // color based on level
+  if(level > 60) fill.style.background = 'linear-gradient(90deg, #7ee787, #2ecc71)';
+  else if(level > 30) fill.style.background = 'linear-gradient(90deg, #ffd700, #ff9500)';
+  else fill.style.background = 'linear-gradient(90deg, #ff7b7b, #d63031)';
+}
+
+function setIntervalSeconds(){
+  const input = document.getElementById('alarmTime');
+  const minutes = parseInt(input.value) || 2;
+  const seconds = minutes * 60;
+  alarmDuration = seconds;
+  
+  if(!controlChar) return alert("❌ Bluetooth not connected");
+  controlChar.writeValue(new TextEncoder().encode("SET:" + seconds));
+  alert("⏱ Alarm interval set to " + minutes + " minute(s)");
+}
+
+function startAlarm(){
+  if(!controlChar) return alert("❌ Bluetooth not connected");
+  
+  updateButtonState('start');
+  controlChar.writeValue(new TextEncoder().encode("START"));
+  
+  // start countdown timer
+  startCountdownTimer(alarmDuration);
+}
+
+function stopAlarm(){
+  if(!controlChar) return alert("❌ Bluetooth not connected");
+  
+  updateButtonState('stop');
+  controlChar.writeValue(new TextEncoder().encode("STOP"));
+  
+  // stop timer
+  if(timerInterval) clearInterval(timerInterval);
+  document.getElementById('timerDisplay').style.display = 'none';
+}
+
+function startCountdownTimer(seconds){
+  const display = document.getElementById('timerDisplay');
+  display.style.display = 'block';
+  
+  let remaining = seconds;
+  
+  const updateDisplay = () => {
+    const mins = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    const timeStr = String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+    document.getElementById('timerValue').textContent = timeStr;
+    
+    if(remaining <= 0){
+      clearInterval(timerInterval);
+      document.getElementById('timerValue').textContent = '⏰ DONE!';
+      document.getElementById('timerValue').style.color = '#ffd700';
+      // auto stop after 2 seconds
+      setTimeout(() => {
+        display.style.display = 'none';
+        document.getElementById('timerValue').style.color = '#fff';
+      }, 2000);
+    }
+    remaining--;
+  };
+  
+  updateDisplay();
+  timerInterval = setInterval(updateDisplay, 1000);
+}
+
+// ---- UI Enhancements: typing subtitle, ripple effect, and simple parallax ----
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTyping('.subtitle');
+  attachButtonRipples();
+  initParallax('#app');
 });
 
-// --- Three.js 3D Rendering ---
-function init3D() {
-  const canvas = document.getElementById("bottle-canvas");
-  if (!canvas) {
-    console.error("bottle-canvas element not found");
-    return;
+function initTyping(selector){
+  const el = document.querySelector(selector);
+  if(!el) return;
+  const text = el.dataset.text || el.textContent.trim();
+  el.textContent = '';
+  let i = 0;
+  const speed = 40;
+  function step(){
+    if(i <= text.length){
+      el.textContent = text.slice(0,i) + (i % 2 === 0 ? '|' : '');
+      i++;
+      setTimeout(step, speed);
+    } else {
+      el.textContent = text;
+    }
   }
-  
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x00000000);
-
-  // Camera
-  camera = new THREE.PerspectiveCamera(
-    50,
-    canvas.clientWidth / canvas.clientHeight,
-    0.1,
-    1000
-  );
-  camera.position.z = 8;
-
-  // Renderer
-  renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
-  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
-
-  // Lighting
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-  scene.add(ambientLight);
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
-  directionalLight.position.set(5, 10, 7.5);
-  scene.add(directionalLight);
-
-  // Bottle - Simple Cylinder Geometry
-  const bottleMaterial = new THREE.MeshPhysicalMaterial({
-    color: 0xadd8e6,
-    transparent: true,
-    opacity: 0.5,
-    roughness: 0.2,
-    metalness: 0.1,
-    transmission: 0.9,
-    ior: 1.5,
-  });
-  
-  const bottleGeometry = new THREE.CylinderGeometry(0.8, 0.9, BOTTLE_HEIGHT, 32);
-  bottle = new THREE.Mesh(bottleGeometry, bottleMaterial);
-  bottle.position.y = 0;
-  scene.add(bottle);
-
-  // Water
-  const waterMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1ca3ec,
-    roughness: 0.3,
-    emissive: 0x0084d3,
-    emissiveIntensity: 0.3,
-  });
-  const waterGeometry = new THREE.CylinderGeometry(0.75, 0.85, BOTTLE_HEIGHT, 32);
-  water = new THREE.Mesh(waterGeometry, waterMaterial);
-  water.scale.y = 0; // Start empty
-  water.position.y = -BOTTLE_HEIGHT / 2;
-  bottle.add(water);
-
-  // Glowing Band
-  const bandGeometry = new THREE.CylinderGeometry(0.95, 0.95, 0.3, 32);
-  const bandMaterial = new THREE.MeshStandardMaterial({
-    color: 0x00ffff,
-    emissive: 0x00ffff,
-    emissiveIntensity: 1,
-  });
-  glowingBand = new THREE.Mesh(bandGeometry, bandMaterial);
-  glowingBand.position.y = 0;
-  bottle.add(glowingBand);
-
-  // Post-processing for Bloom Effect
-  const renderScene = new THREE.RenderPass(scene, camera);
-  const bloomPass = new THREE.UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
-    1.5,
-    0.4,
-    0.85
-  );
-  bloomPass.threshold = 0;
-  bloomPass.strength = 1.2;
-  bloomPass.radius = 0.5;
-  composer = new THREE.EffectComposer(renderer);
-  composer.addPass(renderScene);
-  composer.addPass(bloomPass);
-
-  // Handle window resizing
-  window.addEventListener('resize', onWindowResize);
-
-  animate();
+  step();
 }
 
-function onWindowResize() {
-    const canvas = renderer.domElement;
-    camera.aspect = canvas.clientWidth / canvas.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-  composer.setSize(canvas.clientWidth, canvas.clientHeight);
+function attachButtonRipples(){
+  document.querySelectorAll('.btn').forEach(btn => {
+    btn.addEventListener('click', function(e){
+      const rect = this.getBoundingClientRect();
+      const ripple = document.createElement('span');
+      ripple.className = 'ripple';
+      const size = Math.max(rect.width, rect.height) * 0.8;
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = (e.clientX - rect.left - size/2) + 'px';
+      ripple.style.top = (e.clientY - rect.top - size/2) + 'px';
+      this.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 650);
+    });
+  });
 }
 
-function animate() {
-  requestAnimationFrame(animate);
-
-  if (!bottle) return;
-
-  // Automatic rotation
-  bottle.rotation.y += 0.005;
-
-  // Animate water level
-  if (water) {
-    const currentScale = water.scale.y;
-    const newScale = currentScale + (waterLevelTarget - currentScale) * 0.05;
-    water.scale.y = newScale;
-    water.position.y = (-BOTTLE_HEIGHT / 2) + (newScale * BOTTLE_HEIGHT / 2);
-  }
-
-  // Animate glowing band
-  if (glowingBand) {
-    const time = Date.now() * 0.002;
-    glowingBand.material.emissiveIntensity = Math.sin(time) * 0.5 + 0.5;
-  }
-
-  renderer.render(scene, camera);
-  if (composer) composer.render();
+function initParallax(selector){
+  const node = document.querySelector(selector);
+  if(!node) return;
+  window.addEventListener('mousemove', e => {
+    const cx = window.innerWidth/2;
+    const cy = window.innerHeight/2;
+    const dx = (e.clientX - cx) / cx; // -1..1
+    const dy = (e.clientY - cy) / cy;
+    const tx = dx * 8; // translate range
+    const ty = dy * 6;
+    const rot = dx * 2;
+    node.style.transform = `translate3d(${tx}px, ${ty}px, 0) rotate(${rot}deg)`;
+  });
+  // smooth return when mouse leaves
+  window.addEventListener('mouseleave', () => node.style.transform = '');
 }
+
+// Toggle visual active/inactive state between start and stop buttons
+function updateButtonState(state){
+  const start = document.getElementById('startBtn');
+  const stop = document.getElementById('stopBtn');
+  if(!start || !stop) return;
+  if(state === 'start'){
+    start.classList.add('active');
+    start.classList.remove('inactive');
+    stop.classList.remove('active');
+    stop.classList.add('inactive');
+  } else if(state === 'stop'){
+    stop.classList.add('active');
+    stop.classList.remove('inactive');
+    start.classList.remove('active');
+    start.classList.add('inactive');
+  }
+}
+
+// initialize default state (none active)
+document.addEventListener('DOMContentLoaded', () => {
+  const start = document.getElementById('startBtn');
+  const stop = document.getElementById('stopBtn');
+  if(start) start.classList.remove('active','inactive');
+  if(stop) stop.classList.remove('active','inactive');
+});
